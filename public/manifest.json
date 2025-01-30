@@ -1,0 +1,32 @@
+{
+    "display_override": ["window-controls-overlay"],
+    "orientation": "any",
+    "display": "standalone",
+    "start_url": "https://www.speechtime.co.kr",
+    "name": "Speechtime Calculator",
+    "theme_color": "#FFC777",
+    "background_color": "#FFDBA3",
+    "short_name": "Speechtime",
+    "id": "speechtime-calculator",
+    "description": "Calculate and manage your speech time efficiently. Perfect for presentations, speeches, and lectures.",
+    "icons": [
+      {
+        "src": "/assets/images/logo192.png",
+        "sizes": "192x192",
+        "type": "image/png",
+        "purpose": "any"
+      },
+      {
+        "src": "/assets/images/logo512.png",
+        "sizes": "512x512",
+        "type": "image/png",
+        "purpose": "any"
+      },
+      {
+        "src": "/assets/images/maskable512.png",
+        "sizes": "512x512",
+        "type": "image/png",
+        "purpose": "maskable"
+      }
+    ]
+  }
