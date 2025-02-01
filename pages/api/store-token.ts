@@ -1,7 +1,7 @@
 import { NextApiRequest, NextApiResponse } from "next";
 
 // 실제로는 데이터베이스에 저장해야 합니다
-let fcmTokens: string[] = [];
+const fcmTokens: string[] = [];
 
 export default function handler(req: NextApiRequest, res: NextApiResponse) {
   if (req.method !== "POST") {

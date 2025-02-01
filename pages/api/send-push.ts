@@ -1,11 +1,12 @@
 import { NextApiRequest, NextApiResponse } from "next";
-import admin from "firebase-admin";
+import { initializeApp, cert, getApps } from "firebase-admin/app";
+import { getMessaging } from "firebase-admin/messaging";
 
 // Firebase Admin SDK 초기화
-if (!admin.apps.length) {
+if (!getApps().length) {
   try {
-    admin.initializeApp({
-      credential: admin.credential.cert({
+    initializeApp({
+      credential: cert({
         projectId: process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID,
         clientEmail: process.env.FIREBASE_CLIENT_EMAIL,
         privateKey: process.env.FIREBASE_PRIVATE_KEY?.replace(/\\n/g, "\n"),
@@ -27,7 +28,7 @@ export default async function handler(
 
   try {
     const { token } = req.body;
-    console.log("Received token:", token);
+    console.log("Sending push to token:", token);
 
     if (!token) {
       return res.status(400).json({ message: "FCM token is required" });
@@ -35,14 +36,18 @@ export default async function handler(
 
     const message = {
       notification: {
-        title: "테스트 알림",
-        body: "이것은 테스트 푸시 알림입니다!",
+        title: "백그라운드 테스트",
+        body: "이 메시지는 백그라운드에서도 표시됩니다.",
       },
-      token
+      data: {
+        url: "/",
+        time: new Date().toISOString(),
+      },
+      token,
     };
 
     console.log("Sending message:", message);
-    const response = await admin.messaging().send(message);
+    const response = await getMessaging().send(message);
     console.log("Push notification sent successfully:", response);
     res.status(200).json({ success: true, response });
   } catch (error) {
