@@ -7,12 +7,35 @@ const PRECACHE_RESOURCES = [
   "/assets/images/desktopLogo.svg",
   "/assets/images/mobileLogo.svg",
   "/assets/images/tabletLogo.svg",
-  // Next.js 정적 파일들
-  "/_next/static/chunks/main.js",
-  "/_next/static/chunks/webpack.js",
-  "/_next/static/chunks/pages/_app.js",
-  "/_next/static/chunks/pages/index.js",
 ];
+
+// 알림 옵션 설정
+const notificationOptions = {
+  body: "새로운 알림이 도착했습니다!",
+  icon: "/assets/images/logo192.png",
+  badge: "/assets/images/logo192.png",
+  image: "/assets/images/logo192.png",
+  vibrate: [200, 100, 200],
+  tag: "new-notification",
+  renotify: true,
+  actions: [
+    { action: "confirm", title: "확인", icon: "/assets/images/logo192.png" },
+    { action: "cancel", title: "취소", icon: "/assets/images/logo192.png" },
+  ],
+};
+
+self.addEventListener("push", function (event) {
+  console.log("📩 Push Received:", event);
+
+  const options = { ...notificationOptions };
+  if (event.data) {
+    options.body = event.data.text();
+  }
+
+  event.waitUntil(
+    self.registration.showNotification("테스트 알림 제목", options)
+  );
+});
 
 // 설치 시 기본 리소스 캐시
 self.addEventListener("install", (event) => {
@@ -69,4 +92,13 @@ self.addEventListener("fetch", (event) => {
       });
     })
   );
+});
+
+// 알림 클릭 처리
+self.addEventListener("notificationclick", (event) => {
+  event.notification.close();
+
+  if (event.action === "confirm") {
+    clients.openWindow("/");
+  }
 });
