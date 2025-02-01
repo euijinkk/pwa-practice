@@ -10,11 +10,19 @@ export default function Home() {
   const [showInstallBanner, setShowInstallBanner] = useState(false);
 
   useEffect(() => {
+    if (typeof window === "undefined") return;
+
     // 현재 알림 권한 상태 확인
-    setNotificationStatus(Notification.permission);
+    if ("Notification" in window) {
+      setNotificationStatus(Notification.permission);
+    }
 
     // 이미 권한이 허용되어 있다면 토큰 가져오기
-    if (Notification.permission === "granted" && messaging) {
+    if (
+      "Notification" in window &&
+      Notification.permission === "granted" &&
+      messaging
+    ) {
       getToken(messaging, {
         vapidKey: process.env.NEXT_PUBLIC_VAPID_KEY,
       })
@@ -33,10 +41,12 @@ export default function Home() {
     if (messaging) {
       onMessage(messaging, (payload) => {
         console.log("Received foreground message:", payload);
-        new Notification(payload.notification?.title || "알림", {
-          body: payload.notification?.body,
-          icon: "/assets/images/logo192.png",
-        });
+        if ("Notification" in window) {
+          new Notification(payload.notification?.title || "알림", {
+            body: payload.notification?.body,
+            icon: "/assets/images/logo192.png",
+          });
+        }
       });
     }
 
@@ -60,6 +70,11 @@ export default function Home() {
   }, []);
 
   const requestNotificationPermission = async () => {
+    if (!("Notification" in window)) {
+      console.log("This browser does not support notifications");
+      return;
+    }
+
     try {
       const permission = await Notification.requestPermission();
       setNotificationStatus(permission);
