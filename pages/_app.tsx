@@ -4,17 +4,11 @@ import { firebase_app } from "@/firebase/firebase";
 
 export default function App({ Component, pageProps }: AppProps) {
   useEffect(() => {
-    // Firebase 초기화 확인
-    if (firebase_app) {
-      console.log("Firebase initialized successfully");
-    }
-
-    if (typeof window !== "undefined" && "serviceWorker" in navigator) {
-      // PWA 서비스 워커 등록
+    if ("serviceWorker" in navigator) {
       navigator.serviceWorker
         .register("/service-worker.js")
         .then((registration) => {
-          console.log("Service Worker registered:", registration.scope);
+          console.log("Service Worker registered:", registration);
         })
         .catch((error) => {
           console.error("Service Worker registration failed:", error);

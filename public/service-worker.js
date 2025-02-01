@@ -1,12 +1,11 @@
-const CACHE_NAME = "speechtime-v1";
+const CACHE_NAME = "pwa-practice-v1";
 
 // 캐시할 기본 리소스
 const PRECACHE_RESOURCES = [
   "/",
   "/manifest.json",
-  "/assets/images/desktopLogo.svg",
-  "/assets/images/mobileLogo.svg",
-  "/assets/images/tabletLogo.svg",
+  "/assets/images/logo192.png",
+  "/assets/images/logo512.png"
 ];
 
 // 알림 옵션 설정
@@ -39,22 +38,27 @@ self.addEventListener("push", function (event) {
 
 // 설치 시 기본 리소스 캐시
 self.addEventListener("install", (event) => {
+  console.log("[Service Worker] Install");
   event.waitUntil(
     caches
       .open(CACHE_NAME)
-      .then((cache) => cache.addAll(PRECACHE_RESOURCES))
+      .then((cache) => {
+        console.log("[Service Worker] Caching all: app shell and content");
+        return cache.addAll(PRECACHE_RESOURCES);
+      })
       .then(() => self.skipWaiting())
   );
 });
 
 // 활성화 시 이전 캐시 정리
 self.addEventListener("activate", (event) => {
+  console.log("[Service Worker] Activate");
   event.waitUntil(
     caches
       .keys()
-      .then((cacheNames) => {
+      .then((keyList) => {
         return Promise.all(
-          cacheNames
+          keyList
             .filter((name) => name.startsWith("speechtime-"))
             .filter((name) => name !== CACHE_NAME)
             .map((name) => caches.delete(name))
