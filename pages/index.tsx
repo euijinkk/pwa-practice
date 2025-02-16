@@ -143,6 +143,12 @@ export default function Home() {
     }
   };
 
+  useEffect(() => {
+    fetch("https://jsonplaceholder.typicode.com/todos/1")
+      .then((response) => response.json())
+      .then((json) => console.log(json));
+  }, []);
+
   return (
     <main className="p-4">
       {/* 설치 배너 */}
