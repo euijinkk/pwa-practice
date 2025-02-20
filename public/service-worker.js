@@ -1,4 +1,6 @@
-const CACHE_NAME = "static-cache-v3";
+const DB_NAME = "pwa-store";
+const DB_VERSION = 1;
+const STORE_NAME = "resources";
 
 // 캐시할 정적 리소스
 const STATIC_RESOURCES = [
@@ -35,6 +37,94 @@ const notificationOptions = {
   ],
 };
 
+let db = null;
+
+// IndexedDB 초기화
+async function initDB() {
+  if (db) return db;
+
+  return new Promise((resolve, reject) => {
+    const request = indexedDB.open(DB_NAME, DB_VERSION);
+
+    request.onerror = () => reject(request.error);
+    request.onsuccess = () => {
+      db = request.result;
+      resolve(db);
+    };
+
+    request.onupgradeneeded = (event) => {
+      const db = event.target.result;
+      if (!db.objectStoreNames.contains(STORE_NAME)) {
+        db.createObjectStore(STORE_NAME, { keyPath: "url" });
+      }
+    };
+  });
+}
+
+// 리소스 저장
+async function saveResource(url, response) {
+  if (!db) await initDB();
+
+  // 먼저 데이터 준비
+  const arrayBuffer = await response.clone().arrayBuffer();
+  const responseData = {
+    url: url,
+    data: arrayBuffer,
+    headers: Object.fromEntries(response.headers),
+    status: response.status,
+    statusText: response.statusText,
+    type: response.type,
+  };
+
+  return new Promise((resolve, reject) => {
+    const tx = db.transaction(STORE_NAME, "readwrite");
+    const store = tx.objectStore(STORE_NAME);
+
+    // 트랜잭션 이벤트 핸들러 설정
+    tx.oncomplete = () => resolve();
+    tx.onerror = () => reject(tx.error);
+    tx.onabort = () => reject(new Error("Transaction aborted"));
+
+    try {
+      store.put(responseData);
+    } catch (error) {
+      tx.abort();
+      reject(error);
+    }
+  });
+}
+
+// 리소스 가져오기
+async function getResource(url) {
+  if (!db) await initDB();
+
+  return new Promise((resolve, reject) => {
+    const tx = db.transaction(STORE_NAME, "readonly");
+    const store = tx.objectStore(STORE_NAME);
+
+    const request = store.get(url);
+
+    request.onsuccess = () => {
+      const data = request.result;
+      if (!data) {
+        resolve(null);
+        return;
+      }
+
+      resolve(
+        new Response(data.data, {
+          status: data.status,
+          statusText: data.statusText,
+          headers: new Headers(data.headers),
+          type: data.type,
+        })
+      );
+    };
+
+    request.onerror = () => reject(request.error);
+  });
+}
+
 // 푸시 알림 처리
 self.addEventListener("push", function (event) {
   console.log("📩 Push Received:", event);
@@ -49,38 +139,36 @@ self.addEventListener("push", function (event) {
   );
 });
 
-// 설치 시 정적 리소스 캐시
+// 설치 시 정적 리소스 저장
 self.addEventListener("install", (event) => {
   console.log("[Service Worker] Install");
   event.waitUntil(
-    caches
-      .open(CACHE_NAME)
-      .then((cache) => {
-        console.log("[Service Worker] Caching static resources");
-        return cache.addAll(STATIC_RESOURCES);
-      })
-      .then(() => self.skipWaiting())
+    (async () => {
+      try {
+        // 순차적으로 리소스 캐싱
+        for (const url of STATIC_RESOURCES) {
+          try {
+            const response = await fetch(url);
+            if (response.ok) {
+              await saveResource(url, response.clone());
+              console.log(`Cached: ${url}`);
+            }
+          } catch (error) {
+            console.error(`Failed to cache ${url}:`, error);
+          }
+        }
+        await self.skipWaiting();
+      } catch (error) {
+        console.error("Installation failed:", error);
+      }
+    })()
   );
 });
 
-// 활성화 시 이전 캐시 정리
+// 활성화
 self.addEventListener("activate", (event) => {
   console.log("[Service Worker] Activate");
-  event.waitUntil(
-    caches
-      .keys()
-      .then((keyList) => {
-        return Promise.all(
-          keyList
-            .filter((key) => key !== CACHE_NAME)
-            .map((key) => {
-              console.log("[Service Worker] Removing old cache:", key);
-              return caches.delete(key);
-            })
-        );
-      })
-      .then(() => self.clients.claim())
-  );
+  event.waitUntil(self.clients.claim());
 });
 
 // 네트워크 요청 처리
@@ -88,41 +176,50 @@ self.addEventListener("fetch", (event) => {
   const url = new URL(event.request.url);
 
   event.respondWith(
-    // 1. 항상 네트워크 요청 먼저
-    fetch(event.request)
-      .then((response) => {
+    (async () => {
+      try {
+        // 1. 항상 네트워크 요청 먼저
+        const response = await fetch(event.request);
         const responseClone = response.clone();
 
-        // 2. 정적 리소스나 API 요청만 선택적으로 캐시
-        // 정적 리소스 체크 - 정확한 경로이거나 특정 경로로 시작하는 경우
+        // 2. 성공한 응답은 IndexedDB에 저장 (정적 리소스 제외)
         if (
-          STATIC_RESOURCES.includes(url.pathname) ||
           url.pathname.startsWith("/_next/static/") ||
-          url.pathname.startsWith("/styles/")
-        ) {
-          // 정적 리소스 캐시
-          caches.open(CACHE_NAME).then((cache) => {
-            cache.put(event.request, responseClone);
-          });
-        } else if (
+          url.pathname.startsWith("/styles/") ||
           CACHEABLE_API_ROUTES.some((route) => url.pathname.startsWith(route))
         ) {
-          // API 캐시
-          caches.open(CACHE_NAME).then((cache) => {
-            cache.put(event.request, responseClone);
-          });
+          await saveResource(event.request.url, responseClone);
         }
+
         return response;
-      })
-      .catch(() => {
-        console.log(event.request);
-        // 3. 네트워크 실패시 캐시 확인
-        return caches.match(event.request).then((cachedResponse) => {
-          if (cachedResponse) return cachedResponse;
-          if (event.request.mode === "navigate") return caches.match("/");
-          return null;
-        });
-      })
+      } catch (error) {
+        // 3. 네트워크 에러 && 오프라인일 때만 IndexedDB 확인
+        if (!navigator.onLine) {
+          console.log(
+            "Offline mode - Fetching from IndexedDB:",
+            event.request.url
+          );
+          const cachedResponse = await getResource(event.request.url);
+
+          if (cachedResponse) {
+            return cachedResponse;
+          }
+
+          // 4. 오프라인 폴백 처리
+          if (event.request.mode === "navigate") {
+            const rootResponse = await getResource("/");
+            if (rootResponse) return rootResponse;
+          } else if (event.request.destination === "image") {
+            const offlineImage = await getResource(
+              "/assets/images/logo192.png"
+            );
+            if (offlineImage) return offlineImage;
+          }
+        }
+
+        throw error;
+      }
+    })()
   );
 });
 
